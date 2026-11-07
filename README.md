@@ -32,15 +32,27 @@ shows where your shell is: over SSH, as root or inside a container.
 
 With zebra stripes:
 
-![PreTTY with zebra stripes](assets/screenshots/zebra-stripes.png)
+![PreTTY with zebra stripes](assets/screenshots/zebra-stripes.jxl)
 
 Without zebra stripes:
 
-![PreTTY without zebra stripes](assets/screenshots/no-stripes.png)
+![PreTTY without zebra stripes](assets/screenshots/no-stripes.jxl)
 
 During an SSH session the background turns blue:
 
-![PreTTY in an SSH session](assets/screenshots/ssh-session.png)
+![PreTTY in an SSH session](assets/screenshots/ssh-session.jxl)
+
+Inside a container the background turns green:
+
+![PreTTY inside a container](assets/screenshots/container-session.jxl)
+
+As root the background turns red:
+
+![PreTTY in a root session](assets/screenshots/root-session.jxl)
+
+With a semi-transparent background the desktop shows through:
+
+![PreTTY with a semi-transparent background](assets/screenshots/transparent.jxl)
 
 ## Install
 
