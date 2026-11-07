@@ -1,0 +1,25 @@
+[package]
+name = "pretty"
+version = "0.1.0"
+edition = "2024"
+authors = ["Grzegorz Blach <grzegorz@blach.dev>"]
+description = "Pretty terminal emulator"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+alacritty_terminal = "0.26"
+dirs = "7"
+futures = "0.3"
+gpui-kit = "0.9"
+rustix = { version = "1", features = ["process", "termios"] }
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+
+[patch.crates-io]
+gpui-component = { path = "vendor/gpui-component" }
+gpui-pre-wgpu = { path = "vendor/gpui-pre-wgpu" }
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

@@ -1,0 +1,12 @@
+[alias]
+# Rebuilds the patched crates in vendor/ (see xtask/). Run once after cloning and after
+# updating gpui-kit; the main package does not build without it.
+setup = "run --quiet --manifest-path xtask/Cargo.toml -- setup"
+# Cross-builds release binaries for aarch64 and x86_64 Linux (see xtask/).
+dist = "run --quiet --manifest-path xtask/Cargo.toml -- dist"
+# Builds .deb packages for Debian / Ubuntu from the `cargo dist` binaries (see xtask/).
+deb = "run --quiet --manifest-path xtask/Cargo.toml -- deb"
+# Builds RPM v6 packages for Fedora from the `cargo dist` binaries (see xtask/).
+rpm = "run --quiet --manifest-path xtask/Cargo.toml -- rpm"
+# Builds pacman packages for Arch Linux from the `cargo dist` binaries (see xtask/).
+pacman = "run --quiet --manifest-path xtask/Cargo.toml -- pacman"

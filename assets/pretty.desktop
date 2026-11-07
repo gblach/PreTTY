@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=PreTTY
+GenericName=Terminal
+Comment=Pretty terminal emulator
+Exec=pretty
+Icon=pretty
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;prompt;command;commandline;
+StartupNotify=true
+StartupWMClass=pretty

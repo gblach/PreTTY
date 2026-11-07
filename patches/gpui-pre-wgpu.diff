@@ -1,0 +1,14 @@
+diff -ru a/src/wgpu_context.rs b/src/wgpu_context.rs
+--- a/src/wgpu_context.rs
++++ b/src/wgpu_context.rs
+@@ -473,7 +473,9 @@
+     #[cfg(not(target_family = "wasm"))]
+     pub fn instance(display: Option<Box<dyn wgpu::wgt::WgpuHasDisplayHandle>>) -> wgpu::Instance {
+         wgpu::Instance::new(wgpu::InstanceDescriptor {
+-            backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
++            // Vulkan only. Starting the GL backend loads Mesa's GL
++            // driver and LLVM (~56 MB of RSS) even when rendering uses Vulkan.
++            backends: wgpu::Backends::VULKAN,
+             flags: wgpu::InstanceFlags::default(),
+             backend_options: wgpu::BackendOptions::default(),
+             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),

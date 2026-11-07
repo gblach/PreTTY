@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: lint (${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Finish every toolchain so a failure shows which ones are affected.
+      fail-fast: false
+      matrix:
+        rust: [stable, beta, nightly]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The same development libraries the Containerfile installs for release builds.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfontconfig-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            xtask -> target
+
+      - name: Format
+        run: |
+          cargo fmt --check
+          cargo fmt --check --manifest-path xtask/Cargo.toml
+
+      - name: Create patched dependencies
+        run: cargo setup
+
+      - name: Clippy
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo clippy --locked --all-targets --manifest-path xtask/Cargo.toml -- -D warnings

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824" width="1024" height="1024">
+<defs>
+<clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<pattern id="scan" x="0" y="0" width="824" height="24" patternUnits="userSpaceOnUse">
+<rect x="0" y="0" width="824" height="10" fill="#FFFFFF" fill-opacity="0.03"/>
+</pattern>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#393D46"/>
+<stop offset="1" stop-color="#23262C"/>
+</linearGradient>
+<linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.30"/>
+<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.10"/>
+<stop offset="1" stop-color="#FFFFFF" stop-opacity="0.06"/>
+</linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#scan)" clip-path="url(#tile)"/>
+<rect x="104" y="104" width="816" height="816" rx="181" fill="none" stroke="url(#rim)" stroke-width="8"/>
+<polygon points="300,410 480,492 480,528 300,610 300,562 410,510 300,458" fill="#CBD96E"/>
+<rect x="520" y="570" width="200" height="40" fill="#CBD96E"/>
+</svg>
