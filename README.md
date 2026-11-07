@@ -82,7 +82,7 @@ too. PreTTY renders with Vulkan, so it also needs a Vulkan driver.
 
 On other distributions, or to build it yourself, you need:
 
-- Rust 1.92 or newer (install with [rustup](https://rustup.rs))
+- Rust 1.95 or newer (install with [rustup](https://rustup.rs))
 - `pkg-config` and the fontconfig / XCB / xkbcommon development files
 - At runtime: a Vulkan driver and, for Wayland sessions, the Wayland client library
 
