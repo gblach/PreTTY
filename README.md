@@ -44,7 +44,17 @@ During an SSH session the background turns blue:
 
 ## Install
 
-Download the package for your distribution from the GitHub Releases page and install it:
+On Fedora, install it from the
+[gblachx/apps](https://copr.fedorainfracloud.org/coprs/gblachx/apps/) COPR repository,
+which also keeps it updated:
+
+```sh
+sudo dnf copr enable gblachx/apps
+sudo dnf install pretty
+```
+
+On other distributions, download the package for your distribution from the GitHub Releases
+page and install it:
 
 ```sh
 sudo dnf install ./pretty-<version>-1.x86_64.rpm           # Fedora
