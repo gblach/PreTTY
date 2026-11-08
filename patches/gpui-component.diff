@@ -71,7 +71,7 @@ diff -ru a/src/select.rs b/src/select.rs
                                      Length::Definite(w) => this.w(w),
                                  })
                                  .popover_style(cx)
-+                                // PreTTY keeps panels square.
++                                // Panels stay square.
 +                                .rounded_none()
                                  .child(
                                      List::new(&self.state.list)
