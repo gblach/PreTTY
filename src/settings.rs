@@ -54,6 +54,8 @@ pub struct FontSettings {
     /// Empty means the theme's monospace font.
     pub family: String,
     pub size: f32,
+    /// Draw bold text in the bright variant of its color.
+    pub bright_bold: bool,
 }
 
 impl Default for FontSettings {
@@ -61,6 +63,7 @@ impl Default for FontSettings {
         Self {
             family: String::new(),
             size: 14.,
+            bright_bold: true,
         }
     }
 }
@@ -469,6 +472,12 @@ impl Render for SettingsPanel {
             });
         let font_family = div().w(px(220.)).child(Select::new(&self.font_family));
         let font_size = div().w(px(140.)).child(NumberInput::new(&self.font_size));
+        let bright_bold = Switch::new("bright-bold")
+            .cursor_pointer()
+            .checked(settings.font.bright_bold)
+            .on_click(|checked, _, cx| {
+                Settings::update(cx, |settings| settings.font.bright_bold = *checked);
+            });
         let opacity = div().w(px(140.)).child(NumberInput::new(&self.opacity));
         let zebra = Switch::new("zebra")
             .cursor_pointer()
@@ -484,7 +493,13 @@ impl Render for SettingsPanel {
             .child(
                 section("FONT", cx)
                     .child(row("Family", "Installed monospace fonts", font_family, cx))
-                    .child(row("Size", "Text size in pixels", font_size, cx)),
+                    .child(row("Size", "Text size in pixels", font_size, cx))
+                    .child(row(
+                        "Bright bold",
+                        "Draw bold text in brighter colors",
+                        bright_bold,
+                        cx,
+                    )),
             )
             .child(
                 section("CURSOR", cx)
@@ -558,6 +573,7 @@ mod tests {
         let settings: Settings = toml::from_str("[cursor]\nshape = \"block\"").unwrap();
         assert!(settings.cursor.shape == CursorShape::Block);
         assert_eq!(settings.font.size, 14.);
+        assert!(settings.font.bright_bold);
         assert!(settings.cursor.blink);
         assert!(settings.window.maximized);
     }

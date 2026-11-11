@@ -174,6 +174,9 @@ fn default_rgb(index: usize) -> Rgb {
             dim(rgb_from_u32(ANSI[i - NamedColor::DimBlack as usize]))
         }
         i if i == NamedColor::DimForeground as usize => dim(rgb_from_u32(FOREGROUND)),
+        i if i == NamedColor::BrightForeground as usize => {
+            rgb_from_u32(ANSI[NamedColor::BrightWhite as usize])
+        }
         _ => rgb_from_u32(FOREGROUND),
     }
 }
@@ -348,6 +351,15 @@ fn cell_font(base: &Font, flags: Flags) -> Font {
     font
 }
 
+/// The bright variant of the 8 basic colors; other colors have none.
+fn bright(color: Color) -> Color {
+    match color {
+        Color::Named(name) => Color::Named(name.to_bright()),
+        Color::Indexed(index @ 0..8) => Color::Indexed(index + 8),
+        color => color,
+    }
+}
+
 fn stripe_color(color: Rgb) -> Rgb {
     let lift = |c: u8| c.saturating_add(5);
     Rgb {
@@ -372,6 +384,7 @@ fn build_frame(
     term: &Term<Listener>,
     links: &[Match],
     font: &Font,
+    bright_bold: bool,
     focused: bool,
     cursor_on: bool,
     background_override: Option<Rgb>,
@@ -403,7 +416,12 @@ fn build_frame(
             continue;
         }
 
-        let mut fg = resolve_cell(cell.fg);
+        let fg = if bright_bold && flags.contains(Flags::BOLD) {
+            bright(cell.fg)
+        } else {
+            cell.fg
+        };
+        let mut fg = resolve_cell(fg);
         let mut bg = resolve_cell(cell.bg);
         if flags.contains(Flags::INVERSE) {
             std::mem::swap(&mut fg, &mut bg);
@@ -1083,6 +1101,7 @@ impl Render for TerminalView {
         let flash = self.bell_flash.is_some();
         let opacity = settings.opacity();
         let zebra = settings.background.zebra;
+        let bright_bold = settings.font.bright_bold;
         let background_override = match self.session {
             SessionKind::Local => None,
             SessionKind::Container => Some(rgb_from_u32(CONTAINER_BACKGROUND)),
@@ -1142,6 +1161,7 @@ impl Render for TerminalView {
                             &term.lock(),
                             &links,
                             &font,
+                            bright_bold,
                             focused,
                             cursor_on,
                             background_override,
@@ -1179,8 +1199,8 @@ mod tests {
     use alacritty_terminal::vte::ansi::Processor;
 
     use super::{
-        Keystroke, LINK_PATTERN, Modifiers, RegexSearch, Rgb, TermMode, default_rgb, key_to_bytes,
-        visible_links,
+        Color, Keystroke, LINK_PATTERN, Modifiers, NamedColor, RegexSearch, Rgb, TermMode, bright,
+        default_rgb, key_to_bytes, visible_links,
     };
 
     fn links(text: &str) -> Vec<String> {
@@ -1264,6 +1284,19 @@ mod tests {
             bytes(keystroke("f1", None, none), TermMode::NONE),
             b"\x1bOP"
         );
+    }
+
+    #[test]
+    fn only_basic_colors_have_a_bright_variant() {
+        assert_eq!(
+            bright(Color::Named(NamedColor::Red)),
+            Color::Named(NamedColor::BrightRed)
+        );
+        assert_eq!(bright(Color::Indexed(4)), Color::Indexed(12));
+        assert_eq!(bright(Color::Indexed(12)), Color::Indexed(12));
+        assert_eq!(bright(Color::Indexed(100)), Color::Indexed(100));
+        let rgb = Color::Spec(Rgb { r: 1, g: 2, b: 3 });
+        assert_eq!(bright(rgb), rgb);
     }
 
     #[test]

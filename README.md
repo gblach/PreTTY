@@ -17,6 +17,7 @@ shows where your shell is: over SSH, as root or inside a container.
 
   A container wins over SSH and SSH over root, so `sudo podman exec` shows green.
 - Optional zebra stripes (every other row shaded) and a background opacity setting
+- Bold text is drawn in the bright variant of its color, which can be turned off
 - Clickable `http://` and `https://` links, opened in the default browser
 - Mouse selection: drag, double click for a word, triple click for a line; dragging past the
   top or bottom edge scrolls, faster the further away the pointer is
@@ -139,6 +140,7 @@ to `~/.config/pretty.toml`. The About window (`Ctrl+Shift+H`) lists all keyboard
 | ------------------------ | ----------- | -------------------------------------------------- |
 | `font.family`            | empty       | Font name; empty means the theme's monospace font  |
 | `font.size`              | `14`        | Font size in pixels                                |
+| `font.bright_bold`       | `true`      | Draw bold text in the bright variant of its color  |
 | `cursor.shape`           | `underline` | `underline`, `beam` or `block`                     |
 | `cursor.blink`           | `true`      | Blink the cursor                                   |
 | `window.columns`         | `100`       | Initial width in columns                           |
@@ -155,10 +157,11 @@ to `~/.config/pretty.toml`. The About window (`Ctrl+Shift+H`) lists all keyboard
 
 `cargo setup` vendors every crate that has a file in `patches/`:
 
-| Patch                          | Change                                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `patches/gpui-component.diff`  | Clickable controls (buttons, number steppers, select and its items) show the pointer cursor   |
-| `patches/gpui-pre-wgpu.diff`   | Rendering starts only Vulkan; starting OpenGL too loaded Mesa's GL driver (about 35 MB of RSS) |
+| Patch                         | Change                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `patches/gpui-component.diff` | Clickable controls (buttons, number steppers, select and its items) show the pointer cursor    |
+| `patches/gpui-pre-wgpu.diff`  | Rendering starts only Vulkan; starting OpenGL too loaded Mesa's GL driver (about 35 MB of RSS) |
+| `patches/gpui-pre-wgpu.diff`  | Bold text works with variable fonts, which keep every weight in one face                       |
 
 `Cargo.toml` points the dependencies at the patched copies through `[patch.crates-io]`; `vendor/`
 is generated and not committed. PreTTY therefore needs a working Vulkan driver.
