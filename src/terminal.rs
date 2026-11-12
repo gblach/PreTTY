@@ -58,6 +58,8 @@ const CONTAINER_BACKGROUND: u32 = 0x093015;
 const SESSION_CHECK_DELAY: Duration = Duration::from_millis(500);
 const BELL_FLASH: Duration = Duration::from_millis(150);
 const DRAG_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+const SCROLLBAR_WIDTH: Pixels = px(4.);
+const SCROLLBAR_MIN_HEIGHT: Pixels = px(16.);
 // The last character may not be punctuation, so a link at the end of a sentence like
 // "see https://example.com." does not take the full stop with it.
 const LINK_PATTERN: &str = r#"https?://[^\s<>"'`{}|\\^]*[^\s<>"'`{}|\\^.,;:!?)\]]"#;
@@ -570,6 +572,28 @@ fn paint_frame(
         };
         window.paint_quad(quad);
     }
+}
+
+/// The thumb sits at the top of `track` when scrolled to the oldest line and at the bottom when
+/// showing the newest; nothing is drawn while the view is at the bottom.
+fn scrollbar_thumb(
+    track: Bounds<Pixels>,
+    display_offset: usize,
+    history: usize,
+    screen_lines: usize,
+) -> Option<Bounds<Pixels>> {
+    if display_offset == 0 || history == 0 {
+        return None;
+    }
+    let visible = screen_lines as f32 / (history + screen_lines) as f32;
+    let height = (track.size.height * visible)
+        .max(SCROLLBAR_MIN_HEIGHT)
+        .min(track.size.height);
+    let top = (track.size.height - height) * ((history - display_offset) as f32 / history as f32);
+    Some(Bounds::new(
+        point(track.right() - SCROLLBAR_WIDTH, track.top() + top),
+        size(SCROLLBAR_WIDTH, height),
+    ))
 }
 
 pub fn cell_size(text_system: &TextSystem, settings: &Settings) -> Size<Pixels> {
@@ -1157,8 +1181,9 @@ impl Render for TerminalView {
                         grid
                     },
                     move |bounds, grid, window, cx| {
+                        let term = term.lock();
                         let frame = build_frame(
-                            &term.lock(),
+                            &term,
                             &links,
                             &font,
                             bright_bold,
@@ -1168,7 +1193,20 @@ impl Render for TerminalView {
                             opacity,
                             zebra,
                         );
+                        let thumb = scrollbar_thumb(
+                            bounds,
+                            term.grid().display_offset(),
+                            term.grid().history_size(),
+                            term.screen_lines(),
+                        );
+                        drop(term);
                         paint_frame(frame, grid, cell, font_size, focused, window, cx);
+                        if let Some(thumb) = thumb {
+                            window.paint_quad(fill(
+                                thumb,
+                                to_hsla(rgb_from_u32(FOREGROUND)).alpha(0.4),
+                            ));
+                        }
                         if flash {
                             window.paint_quad(fill(bounds, hsla(0., 0., 1., 0.15)));
                         }
@@ -1199,8 +1237,8 @@ mod tests {
     use alacritty_terminal::vte::ansi::Processor;
 
     use super::{
-        Color, Keystroke, LINK_PATTERN, Modifiers, NamedColor, RegexSearch, Rgb, TermMode, bright,
-        default_rgb, key_to_bytes, visible_links,
+        Bounds, Color, Keystroke, LINK_PATTERN, Modifiers, NamedColor, RegexSearch, Rgb, TermMode,
+        bright, default_rgb, key_to_bytes, point, px, scrollbar_thumb, size, visible_links,
     };
 
     fn links(text: &str) -> Vec<String> {
@@ -1297,6 +1335,21 @@ mod tests {
         assert_eq!(bright(Color::Indexed(100)), Color::Indexed(100));
         let rgb = Color::Spec(Rgb { r: 1, g: 2, b: 3 });
         assert_eq!(bright(rgb), rgb);
+    }
+
+    #[test]
+    fn scrollbar_thumb_follows_display_offset() {
+        let track = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(100.)));
+        assert_eq!(scrollbar_thumb(track, 0, 75, 25), None);
+        let top = scrollbar_thumb(track, 75, 75, 25).expect("scrolled to the top");
+        assert_eq!(
+            top,
+            Bounds::new(point(px(96.), px(0.)), size(px(4.), px(25.)))
+        );
+        let middle = scrollbar_thumb(track, 25, 75, 25).expect("scrolled up");
+        assert_eq!(middle.origin.y, px(50.));
+        let tiny = scrollbar_thumb(track, 1, 100_000, 25).expect("scrolled up");
+        assert_eq!(tiny.size.height, px(16.));
     }
 
     #[test]
