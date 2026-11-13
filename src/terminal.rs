@@ -650,7 +650,9 @@ pub struct TerminalView {
     /// Blink phase; the cursor is drawn only while this is true.
     cursor_on: bool,
     _events: Task<()>,
-    _blink: Task<()>,
+    /// Runs only while this view is focused in an active window.
+    blink: Option<Task<()>>,
+    _focus: [Subscription; 3],
     /// Ends the current bell flash; replacing it restarts the flash.
     bell_flash: Option<Task<()>>,
     _settings: Subscription,
@@ -675,7 +677,7 @@ impl Drop for TerminalView {
 }
 
 impl TerminalView {
-    pub fn new(shell: Shell, cx: &mut Context<Self>) -> Self {
+    pub fn new(shell: Shell, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let Shell {
             term,
             notifier,
@@ -693,14 +695,12 @@ impl TerminalView {
                 }
             }
         });
-        let blink = cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(BLINK_INTERVAL).await;
-                if this.update(cx, |this, cx| this.blink(cx)).is_err() {
-                    break;
-                }
-            }
-        });
+        let focus_handle = cx.focus_handle();
+        let focus = [
+            cx.on_focus(&focus_handle, window, Self::sync_blink),
+            cx.on_blur(&focus_handle, window, Self::sync_blink),
+            cx.observe_window_activation(window, Self::sync_blink),
+        ];
         let settings = cx.observe_global::<Settings>(|this, cx| {
             this.term
                 .lock()
@@ -710,7 +710,7 @@ impl TerminalView {
         Self {
             term,
             notifier,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             title: DEFAULT_TITLE.into(),
             bounds: Bounds::default(),
             cell: size(px(8.), px(16.)),
@@ -725,7 +725,8 @@ impl TerminalView {
             session_check_pending: false,
             cursor_on: true,
             _events: events,
-            _blink: blink,
+            blink: None,
+            _focus: focus,
             bell_flash: None,
             _settings: settings,
             link_regex: RegexSearch::new(LINK_PATTERN).expect("link pattern is valid"),
@@ -763,6 +764,29 @@ impl TerminalView {
             self.cursor_on = cursor_on;
             cx.notify();
         }
+    }
+
+    /// Shows the cursor and counts a full interval before it is hidden again.
+    fn start_blink(&mut self, cx: &mut Context<Self>) {
+        self.cursor_on = true;
+        self.blink = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(BLINK_INTERVAL).await;
+                if this.update(cx, |this, cx| this.blink(cx)).is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+
+    fn sync_blink(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus_handle.is_focused(window) && window.is_window_active() {
+            self.start_blink(cx);
+        } else {
+            self.blink = None;
+            self.cursor_on = true;
+        }
+        cx.notify();
     }
 
     fn update_session(&mut self, cx: &mut Context<Self>) {
@@ -870,7 +894,9 @@ impl TerminalView {
             term.scroll_display(Scroll::Bottom);
             term.selection = None;
         }
-        self.cursor_on = true;
+        if self.blink.is_some() {
+            self.start_blink(cx);
+        }
         self.schedule_session_check(cx);
         self.write(bytes);
         cx.notify();

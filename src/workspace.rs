@@ -196,7 +196,7 @@ impl Workspace {
             .get(self.active)
             .and_then(|tab| tab.view.read(cx).working_directory());
         let view = match Shell::spawn(cx.global::<Settings>().term_config(), working_directory) {
-            Ok(shell) => cx.new(|cx| TerminalView::new(shell, cx)),
+            Ok(shell) => cx.new(|cx| TerminalView::new(shell, window, cx)),
             Err(err) => {
                 eprintln!("failed to start shell: {err}");
                 return;
