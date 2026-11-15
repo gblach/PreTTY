@@ -1,5 +1,6 @@
 use std::fs;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 
 use alacritty_terminal::term::{Config, Osc52};
 use alacritty_terminal::vte::ansi::{CursorShape as TermCursorShape, CursorStyle};
@@ -140,6 +141,18 @@ fn config_path() -> Option<PathBuf> {
     Some(dirs::config_dir()?.join("pretty.toml"))
 }
 
+/// Writes a sibling file and renames it over `path`, so a crash or a reader in
+/// the middle of a write never sees a truncated file. The process ID keeps two
+/// running instances from writing into the same temporary file.
+fn write_atomic(path: &Path, text: &str) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension(format!("toml.{}.tmp", std::process::id()));
+    fs::write(&tmp, text)?;
+    fs::rename(&tmp, path)
+}
+
 impl Settings {
     pub fn load(cx: &App) -> Self {
         let mut settings: Settings = config_path()
@@ -171,7 +184,7 @@ impl Settings {
         };
         let result = toml::to_string(self)
             .map_err(|err| err.to_string())
-            .and_then(|text| fs::write(&path, text).map_err(|err| err.to_string()));
+            .and_then(|text| write_atomic(&path, &text).map_err(|err| err.to_string()));
         if let Err(err) = result {
             eprintln!("failed to save settings to {}: {err}", path.display());
         }
@@ -561,7 +574,22 @@ impl Render for SettingsPanel {
 mod tests {
     use alacritty_terminal::term::Osc52;
 
-    use super::{CursorShape, Settings};
+    use super::{CursorShape, Settings, write_atomic};
+
+    #[test]
+    fn writes_into_missing_directory_without_leftovers() {
+        let dir = std::env::temp_dir().join(format!("pretty-test-{}", std::process::id()));
+        let path = dir.join("nested").join("pretty.toml");
+        write_atomic(&path, "a = 1").unwrap();
+        write_atomic(&path, "a = 2").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "a = 2");
+        let names: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["pretty.toml"]);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn programs_cannot_read_the_clipboard() {
