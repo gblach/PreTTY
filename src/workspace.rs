@@ -199,6 +199,11 @@ impl Workspace {
             Ok(shell) => cx.new(|cx| TerminalView::new(shell, window, cx)),
             Err(err) => {
                 eprintln!("failed to start shell: {err}");
+                // Without a first tab the window would stay empty, so give up with
+                // a failing exit status instead.
+                if self.tabs.is_empty() {
+                    std::process::exit(1);
+                }
                 return;
             }
         };
@@ -224,6 +229,9 @@ impl Workspace {
 
     fn cycle(&mut self, step: isize, window: &mut Window, cx: &mut Context<Self>) {
         let len = self.tabs.len() as isize;
+        if len == 0 {
+            return;
+        }
         let index = (self.active as isize + step).rem_euclid(len) as usize;
         self.activate(index, window, cx);
     }
