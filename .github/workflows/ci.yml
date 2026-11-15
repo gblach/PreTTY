@@ -49,10 +49,13 @@ jobs:
       - name: Create patched dependencies
         run: cargo setup
 
+      # Nightly only warns because new lints land there first and would break the build.
       - name: Clippy
+        env:
+          CLIPPY_FLAGS: ${{ matrix.rust != 'nightly' && '-D warnings' || '' }}
         run: |
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo clippy --locked --all-targets --manifest-path xtask/Cargo.toml -- -D warnings
+          cargo clippy --locked --all-targets -- $CLIPPY_FLAGS
+          cargo clippy --locked --all-targets --manifest-path xtask/Cargo.toml -- $CLIPPY_FLAGS
 
       - name: Test
         run: |
