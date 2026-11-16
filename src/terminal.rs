@@ -328,8 +328,9 @@ fn push_rect(rects: &mut Vec<BackgroundRect>, line: usize, col: usize, cols: usi
     });
 }
 
-fn push_char(chunk: &mut TextChunk, c: char, run: TextRun) {
+fn push_char(chunk: &mut TextChunk, c: char, zerowidth: &[char], run: TextRun) {
     chunk.text.push(c);
+    chunk.text.extend(zerowidth);
     if let Some(last) = chunk.runs.last_mut()
         && last.font == run.font
         && last.color == run.color
@@ -467,15 +468,15 @@ fn build_frame(
             chunk_end = None;
         }
 
-        let c = if flags.contains(Flags::HIDDEN) {
-            ' '
+        let (c, zerowidth) = if flags.contains(Flags::HIDDEN) {
+            (' ', &[][..])
         } else {
-            cell.c
+            (cell.c, cell.zerowidth().unwrap_or_default())
         };
         let decoration_color = Some(fg);
         let link = links.iter().any(|link| link.contains(&point));
         let run = TextRun {
-            len: c.len_utf8(),
+            len: c.len_utf8() + zerowidth.iter().map(|c| c.len_utf8()).sum::<usize>(),
             font: cell_font(font, flags),
             color: fg,
             background_color: None,
@@ -494,7 +495,7 @@ fn build_frame(
                 }),
         };
         let chunk = chunks.last_mut().expect("a chunk was pushed above");
-        push_char(chunk, c, run);
+        push_char(chunk, c, zerowidth, run);
     }
 
     let cursor_line = cursor.point.line.0 + offset as i32;
@@ -1391,6 +1392,41 @@ mod tests {
         let before = stripes(&term);
         processor.advance(&mut term, b"\r\n10");
         assert_eq!(stripes(&term), before);
+    }
+
+    #[test]
+    fn keeps_combining_characters() {
+        let mut term = Term::new(
+            Config::default(),
+            &TermSize::new(80, 5),
+            Listener(futures::channel::mpsc::unbounded().0),
+        );
+        let text = "e\u{301}x \u{2764}\u{fe0f} \u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}!";
+        Processor::<alacritty_terminal::vte::ansi::StdSyncHandler>::new()
+            .advance(&mut term, text.as_bytes());
+        let frame = build_frame(
+            &term,
+            &[],
+            &font("monospace"),
+            false,
+            false,
+            false,
+            None,
+            1.,
+            false,
+        );
+        let text: String = frame
+            .chunks
+            .iter()
+            .map(|chunk| chunk.text.as_str())
+            .collect();
+        assert!(text.starts_with(
+            "e\u{301}x \u{2764}\u{fe0f} \u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}!"
+        ));
+        for chunk in &frame.chunks {
+            let len: usize = chunk.runs.iter().map(|run| run.len).sum();
+            assert_eq!(len, chunk.text.len());
+        }
     }
 
     #[test]
