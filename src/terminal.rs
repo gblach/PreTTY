@@ -1110,8 +1110,9 @@ impl TerminalView {
     fn paste_text(&mut self, text: String, cx: &mut Context<Self>) {
         let bracketed = self.term.lock().mode().contains(TermMode::BRACKETED_PASTE);
         let text = if bracketed {
-            // Stripping ESC stops pasted text from ending the bracketed paste early.
-            format!("\x1b[200~{}\x1b[201~", text.replace('\x1b', ""))
+            // Stripping ESC stops pasted text from ending the bracketed paste early, and some
+            // shells treat ^C as a cancel that ends it too.
+            format!("\x1b[200~{}\x1b[201~", text.replace(['\x1b', '\x03'], ""))
         } else {
             text.replace("\r\n", "\r").replace('\n', "\r")
         };
