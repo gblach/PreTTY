@@ -15,7 +15,7 @@ use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
 use alacritty_terminal::term::test::TermSize;
-use alacritty_terminal::term::{Config, Term, TermMode, viewport_to_point};
+use alacritty_terminal::term::{ClipboardType, Config, Term, TermMode, viewport_to_point};
 use alacritty_terminal::tty;
 use alacritty_terminal::vte::ansi::{Color, CursorShape, Handler, NamedColor, Rgb};
 use futures::StreamExt;
@@ -855,8 +855,11 @@ impl TerminalView {
                 self.title = DEFAULT_TITLE.into();
                 cx.emit(TerminalEvent::TitleChanged);
             }
-            TermEvent::ClipboardStore(_, text) => {
+            TermEvent::ClipboardStore(ClipboardType::Clipboard, text) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
+            }
+            TermEvent::ClipboardStore(ClipboardType::Selection, text) => {
+                cx.write_to_primary(ClipboardItem::new_string(text));
             }
             TermEvent::ColorRequest(index, format) => {
                 let color = self.term.lock().colors()[index].unwrap_or_else(|| default_rgb(index));
