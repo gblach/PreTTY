@@ -476,6 +476,9 @@ fn build_frame(
             (cell.c, cell.zerowidth().unwrap_or_default())
         };
         let decoration_color = Some(fg);
+        let underline_color = cell
+            .underline_color()
+            .map_or(fg, |color| to_hsla(resolve_cell(color)));
         // Links are underlined only on hover, so e.g. `ls --hyperlink` output does not turn
         // into a wall of underlines.
         let link = hovered_link.is_some_and(|link| link.contains(&point))
@@ -488,7 +491,7 @@ fn build_frame(
             underline: (link || flags.intersects(Flags::ALL_UNDERLINES)).then_some(
                 UnderlineStyle {
                     thickness: px(1.),
-                    color: decoration_color,
+                    color: Some(underline_color),
                     wavy: flags.contains(Flags::UNDERCURL),
                 },
             ),
@@ -1299,7 +1302,7 @@ mod tests {
     use super::{
         Bounds, Color, Column, GridPoint, Keystroke, LINK_PATTERN, Line, Listener, Modifiers,
         NamedColor, RegexSearch, Rgb, Scroll, TermMode, bright, build_frame, default_rgb, font,
-        key_to_bytes, point, px, scrollbar_thumb, size, visible_links,
+        key_to_bytes, point, px, scrollbar_thumb, size, to_hsla, visible_links,
     };
 
     fn links(text: &str) -> Vec<String> {
@@ -1516,6 +1519,37 @@ mod tests {
         assert_eq!(underlined(None, None), "");
         assert_eq!(underlined(None, hovered.as_ref()), "one");
         assert_eq!(underlined(regex_link.as_ref(), None), "https://z.org");
+    }
+
+    #[test]
+    fn underline_takes_its_own_color() {
+        let mut term = Term::new(
+            Config::default(),
+            &TermSize::new(80, 5),
+            Listener(futures::channel::mpsc::unbounded().0),
+        );
+        Processor::<alacritty_terminal::vte::ansi::StdSyncHandler>::new()
+            .advance(&mut term, b"\x1b[4;58;2;255;0;0mred\x1b[59mtext\x1b[0m");
+        let frame = build_frame(
+            &term,
+            None,
+            None,
+            &font("monospace"),
+            false,
+            false,
+            false,
+            None,
+            1.,
+            false,
+        );
+        let runs = &frame.chunks.first().expect("text on the first row").runs;
+        let colors: Vec<_> = runs
+            .iter()
+            .map(|run| (run.len, run.underline.and_then(|underline| underline.color)))
+            .collect();
+        let red = to_hsla(Rgb { r: 255, g: 0, b: 0 });
+        assert_eq!(colors[0], (3, Some(red)));
+        assert_eq!(colors[1], (4, Some(runs[1].color)));
     }
 
     #[test]
