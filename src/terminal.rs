@@ -11,7 +11,7 @@ use alacritty_terminal::grid::{Dimensions, Indexed, Scroll};
 use alacritty_terminal::index::{Column, Direction, Line, Point as GridPoint, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::sync::FairMutex;
-use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::cell::{Flags, Hyperlink};
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::term::search::{Match, RegexIter, RegexSearch};
 use alacritty_terminal::term::test::TermSize;
@@ -62,7 +62,8 @@ const SCROLLBAR_WIDTH: Pixels = px(4.);
 const SCROLLBAR_MIN_HEIGHT: Pixels = px(16.);
 // The last character may not be punctuation, so a link at the end of a sentence like
 // "see https://example.com." does not take the full stop with it.
-const LINK_PATTERN: &str = r#"https?://[^\s<>"'`{}|\\^]*[^\s<>"'`{}|\\^.,;:!?)\]]"#;
+const LINK_PATTERN: &str =
+    r#"(?:[a-zA-Z][a-zA-Z0-9+.-]*://|mailto:)[^\s<>"'`{}|\\^]*[^\s<>"'`{}|\\^.,;:!?)\]]"#;
 
 #[derive(Clone)]
 struct Listener(UnboundedSender<TermEvent>);
@@ -385,7 +386,8 @@ fn visible_links<T>(term: &Term<T>, regex: &mut RegexSearch) -> Vec<Match> {
 #[allow(clippy::too_many_arguments)]
 fn build_frame(
     term: &Term<Listener>,
-    links: &[Match],
+    hovered_link: Option<&Match>,
+    hovered_hyperlink: Option<&Hyperlink>,
     font: &Font,
     bright_bold: bool,
     focused: bool,
@@ -474,7 +476,10 @@ fn build_frame(
             (cell.c, cell.zerowidth().unwrap_or_default())
         };
         let decoration_color = Some(fg);
-        let link = links.iter().any(|link| link.contains(&point));
+        // Links are underlined only on hover, so e.g. `ls --hyperlink` output does not turn
+        // into a wall of underlines.
+        let link = hovered_link.is_some_and(|link| link.contains(&point))
+            || hovered_hyperlink.is_some_and(|hovered| cell.hyperlink().as_ref() == Some(hovered));
         let run = TextRun {
             len: c.len_utf8() + zerowidth.iter().map(|c| c.len_utf8()).sum::<usize>(),
             font: cell_font(font, flags),
@@ -660,7 +665,8 @@ pub struct TerminalView {
     link_regex: RegexSearch,
     /// Links found by the last render, so hovering does not search the screen again.
     links: Vec<Match>,
-    hovering_link: bool,
+    hovered_link: Option<Match>,
+    hovered_hyperlink: Option<Hyperlink>,
 }
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
@@ -732,7 +738,8 @@ impl TerminalView {
             _settings: settings,
             link_regex: RegexSearch::new(LINK_PATTERN).expect("link pattern is valid"),
             links: Vec::new(),
-            hovering_link: false,
+            hovered_link: None,
+            hovered_hyperlink: None,
         }
     }
 
@@ -964,6 +971,10 @@ impl TerminalView {
         }
         let (point, _) = self.grid_point(event.position);
         let term = self.term.lock();
+        if let Some(hyperlink) = term.grid()[point].hyperlink() {
+            cx.open_url(hyperlink.uri());
+            return;
+        }
         let link = visible_links(&term, &mut self.link_regex)
             .into_iter()
             .find(|link| link.contains(&point));
@@ -974,9 +985,19 @@ impl TerminalView {
 
     fn mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
         let (point, _) = self.grid_point(event.position);
-        let hovering_link = self.links.iter().any(|link| link.contains(&point));
-        if hovering_link != self.hovering_link {
-            self.hovering_link = hovering_link;
+        let hyperlink = self.term.lock().grid()[point].hyperlink();
+        // A click opens the OSC 8 link first, so the regex link under it is not highlighted.
+        let link = match hyperlink {
+            Some(_) => None,
+            None => self
+                .links
+                .iter()
+                .find(|link| link.contains(&point))
+                .cloned(),
+        };
+        if link != self.hovered_link || hyperlink != self.hovered_hyperlink {
+            self.hovered_link = link;
+            self.hovered_hyperlink = hyperlink;
             cx.notify();
         }
     }
@@ -1174,9 +1195,13 @@ impl Render for TerminalView {
         let view = cx.entity();
         let paint_view = view.clone();
         let term = self.term.clone();
-        let links = visible_links(&term.lock(), &mut self.link_regex);
-        self.links = links.clone();
-        let cursor = if self.hovering_link {
+        self.links = visible_links(&term.lock(), &mut self.link_regex);
+        // New output moves text, so a remembered link may no longer be where it was.
+        let links = &self.links;
+        self.hovered_link = self.hovered_link.take().filter(|link| links.contains(link));
+        let hovered_link = self.hovered_link.clone();
+        let hovered_hyperlink = self.hovered_hyperlink.clone();
+        let cursor = if hovered_link.is_some() || hovered_hyperlink.is_some() {
             CursorStyle::PointingHand
         } else {
             CursorStyle::IBeam
@@ -1218,7 +1243,8 @@ impl Render for TerminalView {
                         let term = term.lock();
                         let frame = build_frame(
                             &term,
-                            &links,
+                            hovered_link.as_ref(),
+                            hovered_hyperlink.as_ref(),
                             &font,
                             bright_bold,
                             focused,
@@ -1271,9 +1297,9 @@ mod tests {
     use alacritty_terminal::vte::ansi::Processor;
 
     use super::{
-        Bounds, Color, Keystroke, LINK_PATTERN, Listener, Modifiers, NamedColor, RegexSearch, Rgb,
-        Scroll, TermMode, bright, build_frame, default_rgb, font, key_to_bytes, point, px,
-        scrollbar_thumb, size, visible_links,
+        Bounds, Color, Column, GridPoint, Keystroke, LINK_PATTERN, Line, Listener, Modifiers,
+        NamedColor, RegexSearch, Rgb, Scroll, TermMode, bright, build_frame, default_rgb, font,
+        key_to_bytes, point, px, scrollbar_thumb, size, visible_links,
     };
 
     fn links(text: &str) -> Vec<String> {
@@ -1290,11 +1316,20 @@ mod tests {
     #[test]
     fn detects_links() {
         assert_eq!(
-            links("see https://example.com/a?b=1. or (http://x.org)\r\nftp://no"),
-            ["https://example.com/a?b=1", "http://x.org"]
+            links("see https://example.com/a?b=1. or (http://x.org)\r\nftp://a file:///b/c"),
+            [
+                "https://example.com/a?b=1",
+                "http://x.org",
+                "ftp://a",
+                "file:///b/c"
+            ]
         );
         assert_eq!(
-            links("cd /home/user/dir ~/src ./a/b ../c\r\nls /etc"),
+            links("write to mailto:me@x.org, or git+ssh://host/repo.git"),
+            ["mailto:me@x.org", "git+ssh://host/repo.git"]
+        );
+        assert_eq!(
+            links("cd /home/user/dir ~/src ./a/b ../c\r\nls /etc localhost:80 12:30 mailto:"),
             Vec::<String>::new()
         );
     }
@@ -1384,7 +1419,7 @@ mod tests {
         term.scroll_display(Scroll::Delta(2));
         let font = font("monospace");
         let stripes = |term: &Term<Listener>| {
-            let frame = build_frame(term, &[], &font, false, true, true, None, 1., true);
+            let frame = build_frame(term, None, None, &font, false, true, true, None, 1., true);
             let first_row = frame
                 .chunks
                 .first()
@@ -1410,7 +1445,8 @@ mod tests {
             .advance(&mut term, text.as_bytes());
         let frame = build_frame(
             &term,
-            &[],
+            None,
+            None,
             &font("monospace"),
             false,
             false,
@@ -1431,6 +1467,55 @@ mod tests {
             let len: usize = chunk.runs.iter().map(|run| run.len).sum();
             assert_eq!(len, chunk.text.len());
         }
+    }
+
+    #[test]
+    fn underlines_only_the_hovered_link() {
+        let mut term = Term::new(
+            Config::default(),
+            &TermSize::new(80, 5),
+            Listener(futures::channel::mpsc::unbounded().0),
+        );
+        let text = concat!(
+            "a \x1b]8;;https://x.org\x1b\\one\x1b]8;;\x1b\\ ",
+            "\x1b]8;;file:///y\x1b\\two\x1b]8;;\x1b\\ https://z.org",
+        );
+        Processor::<alacritty_terminal::vte::ansi::StdSyncHandler>::new()
+            .advance(&mut term, text.as_bytes());
+        let hovered = term.grid()[GridPoint::new(Line(0), Column(3))].hyperlink();
+        assert_eq!(
+            hovered.as_ref().map(|link| link.uri()),
+            Some("https://x.org")
+        );
+        let mut regex = RegexSearch::new(LINK_PATTERN).expect("link pattern is valid");
+        let regex_link = visible_links(&term, &mut regex).pop();
+        let underlined = |hovered_link, hovered_hyperlink| {
+            let frame = build_frame(
+                &term,
+                hovered_link,
+                hovered_hyperlink,
+                &font("monospace"),
+                false,
+                false,
+                false,
+                None,
+                1.,
+                false,
+            );
+            let chunk = frame.chunks.first().expect("text on the first row");
+            let mut start = 0;
+            let mut underlined = String::new();
+            for run in &chunk.runs {
+                if run.underline.is_some() {
+                    underlined.push_str(&chunk.text[start..start + run.len]);
+                }
+                start += run.len;
+            }
+            underlined
+        };
+        assert_eq!(underlined(None, None), "");
+        assert_eq!(underlined(None, hovered.as_ref()), "one");
+        assert_eq!(underlined(regex_link.as_ref(), None), "https://z.org");
     }
 
     #[test]
