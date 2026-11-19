@@ -18,7 +18,8 @@ shows where your shell is: over SSH, as root or inside a container.
   A container wins over SSH and SSH over root, so `sudo podman exec` shows green.
 - Optional zebra stripes (every other row shaded) and a background opacity setting
 - Bold text is drawn in the bright variant of its color, which can be turned off
-- Clickable `http://` and `https://` links, opened in the default browser
+- Links (`scheme://` addresses, `mailto:` and OSC 8 hyperlinks) open with `Ctrl+click`;
+  holding `Ctrl` over a link underlines it and shows its real address
 - Mouse selection: drag, double click for a word, triple click for a line; dragging past the
   top or bottom edge scrolls, faster the further away the pointer is
 - Clipboard: right click copies the selection and clears it; a finished selection also becomes

@@ -670,6 +670,11 @@ pub struct TerminalView {
     links: Vec<Match>,
     hovered_link: Option<Match>,
     hovered_hyperlink: Option<Hyperlink>,
+    /// Links are underlined, shown and opened only while Ctrl is held, so a stray click on
+    /// untrusted output cannot open one.
+    ctrl_held: bool,
+    /// The URI bar moves to the bottom-right corner so it does not cover the pointer.
+    uri_on_right: bool,
 }
 
 impl EventEmitter<TerminalEvent> for TerminalView {}
@@ -743,6 +748,8 @@ impl TerminalView {
             links: Vec::new(),
             hovered_link: None,
             hovered_hyperlink: None,
+            ctrl_held: false,
+            uri_on_right: false,
         }
     }
 
@@ -967,9 +974,9 @@ impl TerminalView {
         cx.notify();
     }
 
-    /// A click that did not drag out a selection opens the link under it.
+    /// A Ctrl+click that did not drag out a selection opens the link under it.
     fn mouse_up(&mut self, event: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
-        if event.click_count != 1 || self.selected_text().is_some() {
+        if !event.modifiers.control || event.click_count != 1 || self.selected_text().is_some() {
             return;
         }
         let (point, _) = self.grid_point(event.position);
@@ -998,9 +1005,30 @@ impl TerminalView {
                 .find(|link| link.contains(&point))
                 .cloned(),
         };
-        if link != self.hovered_link || hyperlink != self.hovered_hyperlink {
+        let ctrl_held = event.modifiers.control;
+        let uri_on_right = event.position.y > self.bounds.bottom() - self.cell.height * 2.
+            && event.position.x < self.bounds.center().x;
+        if link != self.hovered_link
+            || hyperlink != self.hovered_hyperlink
+            || ctrl_held != self.ctrl_held
+            || uri_on_right != self.uri_on_right
+        {
             self.hovered_link = link;
             self.hovered_hyperlink = hyperlink;
+            self.ctrl_held = ctrl_held;
+            self.uri_on_right = uri_on_right;
+            cx.notify();
+        }
+    }
+
+    fn modifiers_changed(
+        &mut self,
+        event: &ModifiersChangedEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if event.modifiers.control != self.ctrl_held {
+            self.ctrl_held = event.modifiers.control;
             cx.notify();
         }
     }
@@ -1175,7 +1203,8 @@ impl TerminalView {
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let settings = cx.global::<Settings>();
-        let font = font(settings.font.family.clone());
+        let font_family = settings.font.family.clone();
+        let font = font(font_family.clone());
         let font_size = px(settings.font.size);
         let cell = cell_size(window.text_system(), settings);
         let focused = self.focus_handle.is_focused(window);
@@ -1202,8 +1231,36 @@ impl Render for TerminalView {
         // New output moves text, so a remembered link may no longer be where it was.
         let links = &self.links;
         self.hovered_link = self.hovered_link.take().filter(|link| links.contains(link));
-        let hovered_link = self.hovered_link.clone();
-        let hovered_hyperlink = self.hovered_hyperlink.clone();
+        let (hovered_link, hovered_hyperlink) = if self.ctrl_held {
+            (self.hovered_link.clone(), self.hovered_hyperlink.clone())
+        } else {
+            (None, None)
+        };
+        // OSC 8 text may differ from where the link really goes, so show the real target.
+        let uri = match (&hovered_hyperlink, &hovered_link) {
+            (Some(hyperlink), _) => Some(hyperlink.uri().to_owned()),
+            (None, Some(link)) => Some(term.lock().bounds_to_string(*link.start(), *link.end())),
+            (None, None) => None,
+        };
+        let uri_bar = uri.map(|uri| {
+            let bar = div()
+                .absolute()
+                .bottom_1()
+                .max_w(relative(0.8))
+                .px_1()
+                .border_1()
+                .border_color(to_hsla(rgb_from_u32(FOREGROUND)).alpha(0.4))
+                .bg(to_hsla(background))
+                .text_color(to_hsla(rgb_from_u32(FOREGROUND)))
+                .font_family(font_family)
+                .text_size(font_size)
+                .child(uri);
+            if self.uri_on_right {
+                bar.right_1()
+            } else {
+                bar.left_1()
+            }
+        });
         let cursor = if hovered_link.is_some() || hovered_hyperlink.is_some() {
             CursorStyle::PointingHand
         } else {
@@ -1229,8 +1286,10 @@ impl Render for TerminalView {
             .on_mouse_down(MouseButton::Right, cx.listener(Self::right_click))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .on_mouse_move(cx.listener(Self::mouse_move))
+            .on_modifiers_changed(cx.listener(Self::modifiers_changed))
             .on_scroll(cx.listener(Self::scroll_wheel))
             .cursor(cursor)
+            .relative()
             .flex_1()
             .size_full()
             .p_1()
@@ -1289,6 +1348,7 @@ impl Render for TerminalView {
                 )
                 .size_full(),
             )
+            .children(uri_bar)
     }
 }
 
