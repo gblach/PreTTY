@@ -668,6 +668,9 @@ pub struct TerminalView {
     link_regex: RegexSearch,
     /// Links found by the last render, so hovering does not search the screen again.
     links: Vec<Match>,
+    /// Display offset and grid size `links` were searched at; `None` after new output. A render
+    /// for anything else, such as a blink tick, reuses `links`.
+    links_key: Option<(usize, usize, usize)>,
     hovered_link: Option<Match>,
     hovered_hyperlink: Option<Hyperlink>,
     /// Links are underlined, shown and opened only while Ctrl is held, so a stray click on
@@ -746,6 +749,7 @@ impl TerminalView {
             _settings: settings,
             link_regex: RegexSearch::new(LINK_PATTERN).expect("link pattern is valid"),
             links: Vec::new(),
+            links_key: None,
             hovered_link: None,
             hovered_hyperlink: None,
             ctrl_held: false,
@@ -862,6 +866,7 @@ impl TerminalView {
                 // Output also means a command may have started or exited
                 // without a key press, e.g. ssh failing to connect.
                 self.schedule_session_check(cx);
+                self.links_key = None;
                 cx.notify();
             }
             TermEvent::Title(title) => {
@@ -1227,7 +1232,18 @@ impl Render for TerminalView {
         let view = cx.entity();
         let paint_view = view.clone();
         let term = self.term.clone();
-        self.links = visible_links(&term.lock(), &mut self.link_regex);
+        {
+            let term = term.lock();
+            let key = (
+                term.grid().display_offset(),
+                term.columns(),
+                term.screen_lines(),
+            );
+            if self.links_key != Some(key) {
+                self.links = visible_links(&term, &mut self.link_regex);
+                self.links_key = Some(key);
+            }
+        }
         // New output moves text, so a remembered link may no longer be where it was.
         let links = &self.links;
         self.hovered_link = self.hovered_link.take().filter(|link| links.contains(link));
