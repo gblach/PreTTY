@@ -304,6 +304,10 @@ impl Workspace {
                 })
                 .label(title)
                 .suffix(close)
+                .on_mouse_up(
+                    MouseButton::Middle,
+                    cx.listener(move |this, _, window, cx| this.close_tab(index, window, cx)),
+                )
                 .on_drag(dragged, |dragged, _, _, cx| {
                     cx.stop_propagation();
                     cx.new(|_| dragged.clone())
