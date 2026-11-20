@@ -161,7 +161,7 @@ to `~/.config/pretty.toml`. The About window (`Ctrl+Shift+H`) lists all keyboard
 | Patch                         | Change                                                                                         |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
 | `patches/gpui-component.diff` | Clickable controls (buttons, number steppers, select and its items) show the pointer cursor    |
-| `patches/gpui-pre-wgpu.diff`  | Rendering starts only Vulkan; starting OpenGL too loaded Mesa's GL driver (about 35 MB of RSS) |
+| `patches/gpui-pre-wgpu.diff`  | Rendering starts only Vulkan; starting OpenGL too loaded Mesa's GL driver (about 19 MB of RSS) |
 | `patches/gpui-pre-wgpu.diff`  | Bold text works with variable fonts, which keep every weight in one face                       |
 
 `Cargo.toml` points the dependencies at the patched copies through `[patch.crates-io]`; `vendor/`

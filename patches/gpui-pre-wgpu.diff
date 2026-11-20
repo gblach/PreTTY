@@ -197,8 +197,8 @@ diff -ru a/src/wgpu_context.rs b/src/wgpu_context.rs
      pub fn instance(display: Option<Box<dyn wgpu::wgt::WgpuHasDisplayHandle>>) -> wgpu::Instance {
          wgpu::Instance::new(wgpu::InstanceDescriptor {
 -            backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
-+            // Vulkan only. Starting the GL backend loads Mesa's GL
-+            // driver and LLVM (~56 MB of RSS) even when rendering uses Vulkan.
++            // Vulkan only. Starting the GL backend too loads Mesa's GL
++            // driver (about 19 MB of RSS) even when rendering uses Vulkan.
 +            backends: wgpu::Backends::VULKAN,
              flags: wgpu::InstanceFlags::default(),
              backend_options: wgpu::BackendOptions::default(),
