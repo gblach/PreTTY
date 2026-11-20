@@ -1,4 +1,5 @@
-//! `cargo deb`: runs `cargo dist`, then packs each binary into a .deb for Debian / Ubuntu.
+//! `cargo deb`: runs `cargo dist` if its binaries are out of date, then
+//! packs each binary into a .deb for Debian / Ubuntu.
 
 use std::fs;
 use std::path::Path;
@@ -7,7 +8,7 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 
 use crate::Result;
-use crate::dist::{DIST_DIR, DIST_TARGETS, dist, dist_binary};
+use crate::dist::{DIST_DIR, DIST_TARGETS, dist_binary, dist_if_stale};
 use crate::package::{
     BINARY, PACKAGE_RELEASE, Package, append_files, min_glibc, package_files, target_arch,
     unix_time,
@@ -59,7 +60,7 @@ fn deb_arch(target: &str) -> Result<&'static str> {
 }
 
 pub fn build(root: &Path, package: &Package) -> Result<()> {
-    dist(root, package)?;
+    dist_if_stale(root, package)?;
     let name = BINARY;
     let version = &package.version;
     let mtime = unix_time()?;

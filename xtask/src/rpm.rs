@@ -1,9 +1,10 @@
-//! `cargo rpm`: runs `cargo dist`, then packs each binary into an RPM v6 package for Fedora.
+//! `cargo rpm`: runs `cargo dist` if its binaries are out of date, then
+//! packs each binary into an RPM v6 package for Fedora.
 
 use std::path::Path;
 
 use crate::Result;
-use crate::dist::{DIST_DIR, DIST_TARGETS, dist, dist_binary};
+use crate::dist::{DIST_DIR, DIST_TARGETS, dist_binary, dist_if_stale};
 use crate::package::{
     BINARY, LICENSE_PATH, PACKAGE_RELEASE, Package, license_text, min_glibc, package_files,
     target_arch,
@@ -20,7 +21,7 @@ const RPM_REQUIRES: [&str; 7] = [
 ];
 
 pub fn build(root: &Path, package: &Package) -> Result<()> {
-    dist(root, package)?;
+    dist_if_stale(root, package)?;
     let name = BINARY;
     let version = &package.version;
     for target in DIST_TARGETS {

@@ -196,8 +196,9 @@ cargo dist
 ```
 
 `cargo rpm`, `cargo deb` and `cargo pacman` run `cargo dist`, then pack each binary with the
-desktop entry and icons into packages in `target/dist`. All install the binary as
-`/usr/bin/pretty`:
+desktop entry and icons into packages in `target/dist`. They skip `cargo dist` when both binaries
+are newer than the sources, so running all three in a row builds only once. All install the binary
+as `/usr/bin/pretty`:
 
 | Command        | Output                                                              | For             |
 | -------------- | ------------------------------------------------------------------- | --------------- |

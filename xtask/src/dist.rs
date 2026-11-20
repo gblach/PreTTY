@@ -5,7 +5,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use bollard::container::LogOutput;
 use bollard::models::{ContainerCreateBody, HostConfig};
@@ -25,6 +25,15 @@ pub const DIST_DIR: &str = "target/dist";
 const CONTAINER_ROOT: &str = "/src";
 // Separate from target/ so container builds don't invalidate host builds and vice versa.
 const CONTAINER_TARGET_DIR: &str = "target/container";
+// Everything the release binary is built from, including the icon that src/about.rs embeds.
+const DIST_INPUTS: [&str; 6] = [
+    "Cargo.lock",
+    "Cargo.toml",
+    "Containerfile",
+    "assets",
+    "src",
+    "vendor",
+];
 
 /// DOCKER_HOST when set, otherwise the rootless Podman socket, otherwise Docker's.
 fn connect_engine() -> Result<Docker> {
@@ -161,4 +170,87 @@ pub fn dist(root: &Path, package: &Package) -> Result<()> {
         .enable_all()
         .build()?
         .block_on(build(root, package))
+}
+
+/// The latest modification time of `path` and, for a folder, everything below it. A folder's own
+/// time also changes when a file in it is deleted.
+fn newest_mtime(path: &Path) -> Result<SystemTime> {
+    let meta = fs::metadata(path)?;
+    let mut newest = meta.modified()?;
+    if meta.is_dir() {
+        for entry in fs::read_dir(path)? {
+            newest = newest.max(newest_mtime(&entry?.path())?);
+        }
+    }
+    Ok(newest)
+}
+
+fn up_to_date(binaries: &[PathBuf], inputs: &[PathBuf]) -> Result<bool> {
+    let mut newest_input = SystemTime::UNIX_EPOCH;
+    for input in inputs {
+        newest_input = newest_input.max(newest_mtime(input)?);
+    }
+    Ok(binaries.iter().all(|binary| {
+        fs::metadata(binary)
+            .and_then(|meta| meta.modified())
+            .is_ok_and(|built| built > newest_input)
+    }))
+}
+
+/// Runs `cargo dist` unless every binary in target/dist is newer than all of `DIST_INPUTS`, so
+/// `cargo deb`, `cargo rpm` and `cargo pacman` in a row build only once.
+pub fn dist_if_stale(root: &Path, package: &Package) -> Result<()> {
+    let binaries = DIST_TARGETS.map(|target| dist_binary(root, package, target));
+    let inputs = DIST_INPUTS.map(|input| root.join(input));
+    if up_to_date(&binaries, &inputs)? {
+        println!("{DIST_DIR} binaries are up to date, skipping cargo dist");
+        return Ok(());
+    }
+    dist(root, package)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set_mtime(path: &Path, secs: u64) {
+        let time = SystemTime::UNIX_EPOCH + Duration::from_secs(secs);
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(time)
+            .unwrap();
+    }
+
+    #[test]
+    fn up_to_date_compares_binaries_with_newest_input() {
+        let dir = std::env::temp_dir().join(format!("xtask-dist-test-{}", std::process::id()));
+        let src = dir.join("src");
+        fs::create_dir_all(&src).unwrap();
+        let input = src.join("main.rs");
+        let binary = dir.join("pretty");
+        fs::write(&input, "").unwrap();
+        fs::write(&binary, "").unwrap();
+        let inputs = [src.clone()];
+        let binaries = [binary.clone()];
+
+        let src_time = fs::metadata(&src).unwrap().modified().unwrap();
+        let secs = src_time
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        set_mtime(&input, secs);
+        set_mtime(&binary, secs + 10);
+        assert!(up_to_date(&binaries, &inputs).unwrap());
+
+        set_mtime(&input, secs + 20);
+        assert!(!up_to_date(&binaries, &inputs).unwrap());
+
+        let missing = [binary.clone(), dir.join("missing")];
+        set_mtime(&input, secs);
+        assert!(!up_to_date(&missing, &inputs).unwrap());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }
