@@ -1,7 +1,7 @@
 diff -ru a/src/button/button.rs b/src/button/button.rs
 --- a/src/button/button.rs
 +++ b/src/button/button.rs
-@@ -672,10 +672,9 @@
+@@ -681,10 +681,9 @@
              .items_center()
              .justify_center()
              .cursor_default()
@@ -18,7 +18,7 @@ diff -ru a/src/button/button.rs b/src/button/button.rs
 diff -ru a/src/input/number_input.rs b/src/input/number_input.rs
 --- a/src/input/number_input.rs
 +++ b/src/input/number_input.rs
-@@ -142,6 +142,8 @@
+@@ -153,6 +153,8 @@
              cx.theme().radius
          };
          let base_state = self.state.clone();
@@ -26,39 +26,39 @@ diff -ru a/src/input/number_input.rs b/src/input/number_input.rs
 +        let stepper_pointer = !self.disabled;
          let content = BaseNumberInput::new(&base_state)
              .disabled(self.disabled)
-             .when_some(self.accessibility_label, |this, label| {
-@@ -167,6 +169,7 @@
-                     // Only the outer corners are rounded, to follow the frame.
-                     .rounded_tl(button_radius)
-                     .rounded_bl(button_radius)
-+                    .when(stepper_pointer, |this| this.cursor_pointer())
-                     .child(Icon::new(IconName::Minus).with_size(button_size))
+             .stepper(self.stepper)
+@@ -180,6 +182,7 @@
+                         // Only the outer corners are rounded, to follow the frame.
+                         .rounded_tl(button_radius)
+                         .rounded_bl(button_radius)
++                        .when(stepper_pointer, |this| this.cursor_pointer())
+                         .child(Icon::new(IconName::Minus).with_size(button_size))
+                 })
              })
-             .input(
-@@ -197,6 +200,7 @@
-                     })
-                     .rounded_tr(button_radius)
-                     .rounded_br(button_radius)
-+                    .when(stepper_pointer, |this| this.cursor_pointer())
-                     .child(Icon::new(IconName::Plus).with_size(button_size))
+@@ -212,6 +215,7 @@
+                         })
+                         .rounded_tr(button_radius)
+                         .rounded_br(button_radius)
++                        .when(stepper_pointer, |this| this.cursor_pointer())
+                         .child(Icon::new(IconName::Plus).with_size(button_size))
+                 })
              });
- 
 diff -ru a/src/searchable_list/item.rs b/src/searchable_list/item.rs
 --- a/src/searchable_list/item.rs
 +++ b/src/searchable_list/item.rs
-@@ -113,6 +113,8 @@
-                 this.when(!self.selected, |this| {
-                     this.hover(|this| this.bg(cx.theme().accent.opacity(0.7)))
+@@ -116,6 +116,8 @@
+                             .text_color(cx.theme().accent_foreground)
+                     })
                  })
 +                // Enabled items are clickable, so show the pointer.
 +                .cursor_pointer()
              })
-             .when(self.selected, |this| this.bg(cx.theme().tokens.accent))
-             .when(self.disabled, |this| {
+             .when(self.selected, |this| {
+                 this.bg(cx.theme().tokens.accent)
 diff -ru a/src/select.rs b/src/select.rs
 --- a/src/select.rs
 +++ b/src/select.rs
-@@ -588,6 +588,8 @@
+@@ -603,6 +603,8 @@
                          .when(allow_open, |this| {
                              this.on_click(cx.listener(Self::toggle_menu))
                          })
@@ -66,8 +66,8 @@ diff -ru a/src/select.rs b/src/select.rs
 +                        .when(!self.state.disabled, |this| this.cursor_pointer())
                          .child(
                              h_flex()
-                                 .id("inner")
-@@ -644,6 +646,8 @@
+                                 .flex_row_dir(cx)
+@@ -661,6 +663,8 @@
                                      Length::Definite(w) => this.w(w),
                                  })
                                  .popover_style(cx)
@@ -79,7 +79,7 @@ diff -ru a/src/select.rs b/src/select.rs
 diff -ru a/src/tab/tab.rs b/src/tab/tab.rs
 --- a/src/tab/tab.rs
 +++ b/src/tab/tab.rs
-@@ -217,8 +217,9 @@
+@@ -218,8 +218,9 @@
  
      fn hovered(&self, selected: bool, cx: &App) -> TabStyle {
          match self {
