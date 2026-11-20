@@ -4,7 +4,10 @@ use std::path::Path;
 
 use crate::Result;
 use crate::dist::{DIST_DIR, DIST_TARGETS, dist};
-use crate::package::{BINARY, MIN_GLIBC, PACKAGE_RELEASE, Package, package_files, target_arch};
+use crate::package::{
+    BINARY, LICENSE_PATH, MIN_GLIBC, PACKAGE_RELEASE, Package, license_text, package_files,
+    target_arch,
+};
 
 const RPM_REQUIRES: [&str; 7] = [
     "fontconfig",
@@ -37,6 +40,10 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
             let options = rpm::FileOptions::new(format!("/{path}")).permissions(mode as u16);
             builder.with_file_contents(data, options)?;
         }
+        let options = rpm::FileOptions::new(format!("/{LICENSE_PATH}"))
+            .permissions(0o644)
+            .license();
+        builder.with_file_contents(license_text(root)?, options)?;
         let out = root
             .join(DIST_DIR)
             .join(format!("{name}-{version}-{PACKAGE_RELEASE}.{arch}.rpm"));

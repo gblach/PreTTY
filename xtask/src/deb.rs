@@ -24,6 +24,26 @@ const DEB_DEPENDS: [&str; 7] = [
     "libxkbcommon0",
 ];
 
+/// Machine-readable `copyright` file. Debian ships the GPL text in /usr/share/common-licenses,
+/// so the file points there instead of repeating it.
+fn copyright(package: &Package) -> Result<String> {
+    let (license, common) = match package.license.as_str() {
+        "GPL-3.0-or-later" => ("GPL-3+", "GPL-3"),
+        other => return Err(format!("{other}: no Debian copyright text").into()),
+    };
+    Ok(format!(
+        "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n\
+         Upstream-Name: {BINARY}\n\
+         \n\
+         Files: *\n\
+         Copyright: {}\n\
+         License: {license}\n \
+         On Debian systems, the complete text of the license can be found in\n \
+         /usr/share/common-licenses/{common}.\n",
+        package.authors.join("\n "),
+    ))
+}
+
 fn tar_gz(files: &[(String, Vec<u8>, u32)], dirs: bool, mtime: u64) -> Result<Vec<u8>> {
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::best()));
     append_files(&mut tar, files, dirs, mtime)?;
@@ -45,7 +65,12 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
     let mtime = unix_time()?;
     for target in DIST_TARGETS {
         let arch = deb_arch(target)?;
-        let files = package_files(root, package, target)?;
+        let mut files = package_files(root, package, target)?;
+        files.push((
+            format!("usr/share/doc/{name}/copyright"),
+            copyright(package)?.into_bytes(),
+            0o644,
+        ));
         let installed_kib = files.iter().map(|(_, data, _)| data.len()).sum::<usize>() / 1024 + 1;
         let control = format!(
             "Package: {name}\n\

@@ -15,6 +15,8 @@ use crate::dist::dist_binary;
 pub const MIN_GLIBC: &str = "2.41";
 pub const PACKAGE_RELEASE: &str = "1";
 pub const BINARY: &str = "pretty";
+/// Where Fedora and Arch expect the license text.
+pub const LICENSE_PATH: &str = "usr/share/licenses/pretty/LICENSE";
 /// Installed path, source path relative to the project root, permissions.
 const ASSETS: [(&str, &str, u32); 3] = [
     (
@@ -82,6 +84,10 @@ pub fn package_files(
         files.push((path.into(), fs::read(root.join(source))?, mode));
     }
     Ok(files)
+}
+
+pub fn license_text(root: &Path) -> Result<Vec<u8>> {
+    Ok(fs::read(root.join("LICENSE"))?)
 }
 
 pub fn unix_time() -> Result<u64> {

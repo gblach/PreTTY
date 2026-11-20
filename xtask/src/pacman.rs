@@ -10,8 +10,8 @@ use flate2::write::GzEncoder;
 use crate::Result;
 use crate::dist::{DIST_DIR, DIST_TARGETS, dist};
 use crate::package::{
-    BINARY, MIN_GLIBC, PACKAGE_RELEASE, Package, append_files, package_files, parent_dirs,
-    target_arch, unix_time,
+    BINARY, LICENSE_PATH, MIN_GLIBC, PACKAGE_RELEASE, Package, append_files, license_text,
+    package_files, parent_dirs, target_arch, unix_time,
 };
 use crate::setup::sha256_hex;
 
@@ -59,7 +59,8 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
     let mtime = unix_time()?;
     for target in DIST_TARGETS {
         let arch = target_arch(target);
-        let files = package_files(root, package, target)?;
+        let mut files = package_files(root, package, target)?;
+        files.push((LICENSE_PATH.into(), license_text(root)?, 0o644));
         let size = files.iter().map(|(_, data, _)| data.len()).sum::<usize>();
         let mut pkginfo = format!(
             "pkgname = {name}\n\
