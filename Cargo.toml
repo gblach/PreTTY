@@ -1,6 +1,6 @@
 [package]
 name = "pretty"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Grzegorz Blach <grzegorz@blach.dev>"]
 description = "Pretty terminal emulator"
@@ -11,7 +11,7 @@ publish = false
 alacritty_terminal = "0.26"
 dirs = "7"
 futures = "0.3"
-gpui-kit = "0.9"
+gpui-kit = "0.10"
 rustix = { version = "1", features = ["process", "termios"] }
 serde = { version = "1", features = ["derive"] }
 toml = "1"
