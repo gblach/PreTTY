@@ -1,5 +1,6 @@
-# Build environment for `cargo dist` (see xtask/). Debian's glibc here is the minimum glibc
-# the release binaries need. aarch64 is cross-compiled against Debian's arm64 multiarch packages.
+# Build environment for `cargo dist` (see xtask/). The release binaries need at most Debian's
+# glibc here; the packages read the exact minimum from the binaries. aarch64 is cross-compiled
+# against Debian's arm64 multiarch packages.
 FROM docker.io/library/rust:trixie
 
 RUN dpkg --add-architecture arm64 && \

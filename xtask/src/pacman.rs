@@ -8,9 +8,9 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 
 use crate::Result;
-use crate::dist::{DIST_DIR, DIST_TARGETS, dist};
+use crate::dist::{DIST_DIR, DIST_TARGETS, dist, dist_binary};
 use crate::package::{
-    BINARY, LICENSE_PATH, MIN_GLIBC, PACKAGE_RELEASE, Package, append_files, license_text,
+    BINARY, LICENSE_PATH, PACKAGE_RELEASE, Package, append_files, license_text, min_glibc,
     package_files, parent_dirs, target_arch, unix_time,
 };
 use crate::setup::sha256_hex;
@@ -59,6 +59,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
     let mtime = unix_time()?;
     for target in DIST_TARGETS {
         let arch = target_arch(target);
+        let glibc = min_glibc(&dist_binary(root, package, target))?;
         let mut files = package_files(root, package, target)?;
         files.push((LICENSE_PATH.into(), license_text(root)?, 0o644));
         let size = files.iter().map(|(_, data, _)| data.len()).sum::<usize>();
@@ -72,7 +73,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
              size = {size}\n\
              arch = {arch}\n\
              license = {}\n\
-             depend = glibc>={MIN_GLIBC}\n",
+             depend = glibc>={glibc}\n",
             package.description,
             package.maintainer()?,
             package.license,

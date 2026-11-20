@@ -7,9 +7,9 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 
 use crate::Result;
-use crate::dist::{DIST_DIR, DIST_TARGETS, dist};
+use crate::dist::{DIST_DIR, DIST_TARGETS, dist, dist_binary};
 use crate::package::{
-    BINARY, MIN_GLIBC, PACKAGE_RELEASE, Package, append_files, package_files, target_arch,
+    BINARY, PACKAGE_RELEASE, Package, append_files, min_glibc, package_files, target_arch,
     unix_time,
 };
 
@@ -65,6 +65,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
     let mtime = unix_time()?;
     for target in DIST_TARGETS {
         let arch = deb_arch(target)?;
+        let glibc = min_glibc(&dist_binary(root, package, target))?;
         let mut files = package_files(root, package, target)?;
         files.push((
             format!("usr/share/doc/{name}/copyright"),
@@ -78,7 +79,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
              Architecture: {arch}\n\
              Maintainer: {}\n\
              Installed-Size: {installed_kib}\n\
-             Depends: libc6 (>= {MIN_GLIBC}), {}\n\
+             Depends: libc6 (>= {glibc}), {}\n\
              Section: x11\n\
              Priority: optional\n\
              Description: {}\n",

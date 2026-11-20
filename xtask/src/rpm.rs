@@ -3,9 +3,9 @@
 use std::path::Path;
 
 use crate::Result;
-use crate::dist::{DIST_DIR, DIST_TARGETS, dist};
+use crate::dist::{DIST_DIR, DIST_TARGETS, dist, dist_binary};
 use crate::package::{
-    BINARY, LICENSE_PATH, MIN_GLIBC, PACKAGE_RELEASE, Package, license_text, package_files,
+    BINARY, LICENSE_PATH, PACKAGE_RELEASE, Package, license_text, min_glibc, package_files,
     target_arch,
 };
 
@@ -25,6 +25,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
     let version = &package.version;
     for target in DIST_TARGETS {
         let arch = target_arch(target);
+        let glibc = min_glibc(&dist_binary(root, package, target))?;
         let mut builder =
             rpm::PackageBuilder::new(name, version, &package.license, arch, &package.description);
         builder
@@ -32,7 +33,7 @@ pub fn build(root: &Path, package: &Package) -> Result<()> {
             .release(PACKAGE_RELEASE)
             .description(&package.description)
             .packager(package.maintainer()?)
-            .requires(rpm::Dependency::greater_eq("glibc", MIN_GLIBC));
+            .requires(rpm::Dependency::greater_eq("glibc", glibc));
         for dep in RPM_REQUIRES {
             builder.requires(rpm::Dependency::any(dep));
         }

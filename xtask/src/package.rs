@@ -6,13 +6,14 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
+use object::Endianness;
+use object::elf::FileHeader64;
+use object::read::elf::FileHeader;
 use serde::Deserialize;
 
 use crate::Result;
 use crate::dist::dist_binary;
 
-// The glibc of the Containerfile's Debian release, which the binaries are linked against.
-pub const MIN_GLIBC: &str = "2.41";
 pub const PACKAGE_RELEASE: &str = "1";
 pub const BINARY: &str = "pretty";
 /// Where Fedora and Arch expect the license text.
@@ -67,6 +68,38 @@ impl Package {
 /// CPU part of a target triple, which is also the RPM architecture: `x86_64`, `aarch64`.
 pub fn target_arch(target: &str) -> &str {
     target.split('-').next().unwrap_or(target)
+}
+
+/// Highest `GLIBC_x.y` symbol version the binary needs, which is the oldest glibc it runs on.
+pub fn min_glibc(binary: &Path) -> Result<String> {
+    let data = fs::read(binary)?;
+    let data = &data[..];
+    let header = FileHeader64::<Endianness>::parse(data)?;
+    let endian = header.endian()?;
+    let sections = header.sections(endian, data)?;
+    let mut newest: Option<Vec<u32>> = None;
+    if let Some((mut needs, link)) = sections.gnu_verneed(endian, data)? {
+        let strings = sections.strings(endian, data, link)?;
+        while let Some((_, mut versions)) = needs.next()? {
+            while let Some(version) = versions.next()? {
+                let name = String::from_utf8_lossy(version.name(endian, strings)?);
+                // Skips other libraries' versions and GLIBC_PRIVATE.
+                let Some(Ok(number)) = name
+                    .strip_prefix("GLIBC_")
+                    .map(|number| number.split('.').map(str::parse).collect())
+                else {
+                    continue;
+                };
+                newest = newest.max(Some(number));
+            }
+        }
+    }
+    let newest = newest.ok_or_else(|| format!("{}: needs no glibc version", binary.display()))?;
+    Ok(newest
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join("."))
 }
 
 /// Installed path without the leading `/`, contents and permissions of every packaged file.
