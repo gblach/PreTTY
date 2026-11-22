@@ -306,9 +306,8 @@ struct TextChunk {
 struct Frame {
     rects: Vec<BackgroundRect>,
     chunks: Vec<TextChunk>,
-    /// Stripe color and which screen rows get it: those where
-    /// `(row + parity) % 2 == 1`.
-    stripes: Option<(Hsla, usize)>,
+    /// Painted on odd screen rows; fixed to the screen, not to the text, so it never moves.
+    stripes: Option<Hsla>,
     cursor: Option<(usize, usize, CursorShape, Hsla)>,
 }
 
@@ -519,12 +518,7 @@ fn build_frame(
     Frame {
         rects,
         chunks,
-        // Parity follows the line's position in the whole buffer, so stripes stay with their
-        // text while scrolling and while new output arrives with the view scrolled up.
-        stripes: zebra.then(|| {
-            let parity = (term.grid().history_size() - offset) % 2;
-            (to_hsla(stripe_color(background)).alpha(opacity), parity)
-        }),
+        stripes: zebra.then(|| to_hsla(stripe_color(background)).alpha(opacity)),
         cursor,
     }
 }
@@ -545,9 +539,9 @@ fn paint_frame(
         )
     };
 
-    if let Some((color, parity)) = frame.stripes {
+    if let Some(color) = frame.stripes {
         let rows = (bounds.size.height / cell.height).ceil() as usize;
-        for row in (0..rows).filter(|row| (row + parity) % 2 == 1) {
+        for row in (0..rows).filter(|row| row % 2 == 1) {
             let stripe_size = size(bounds.size.width, cell.height);
             window.paint_quad(fill(Bounds::new(cell_origin(row, 0), stripe_size), color));
         }
@@ -1377,7 +1371,7 @@ mod tests {
 
     use super::{
         Bounds, Color, Column, GridPoint, Keystroke, LINK_PATTERN, Line, Listener, Modifiers,
-        NamedColor, RegexSearch, Rgb, Scroll, TermMode, bright, build_frame, default_rgb, font,
+        NamedColor, RegexSearch, Rgb, TermMode, bright, build_frame, default_rgb, font,
         key_to_bytes, point, px, scrollbar_thumb, size, to_hsla, visible_links,
     };
 
@@ -1484,32 +1478,6 @@ mod tests {
         assert_eq!(bright(Color::Indexed(100)), Color::Indexed(100));
         let rgb = Color::Spec(Rgb { r: 1, g: 2, b: 3 });
         assert_eq!(bright(rgb), rgb);
-    }
-
-    #[test]
-    fn stripes_stay_with_text_when_output_arrives_while_scrolled_up() {
-        let mut term = Term::new(
-            Config::default(),
-            &TermSize::new(80, 5),
-            Listener(futures::channel::mpsc::unbounded().0),
-        );
-        let mut processor = Processor::<alacritty_terminal::vte::ansi::StdSyncHandler>::new();
-        processor.advance(&mut term, b"0\r\n1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9");
-        term.scroll_display(Scroll::Delta(2));
-        let font = font("monospace");
-        let stripes = |term: &Term<Listener>| {
-            let frame = build_frame(term, None, None, &font, false, true, true, None, 1., true);
-            let first_row = frame
-                .chunks
-                .first()
-                .expect("text on the first row")
-                .text
-                .clone();
-            (first_row, frame.stripes.expect("zebra is on").1)
-        };
-        let before = stripes(&term);
-        processor.advance(&mut term, b"\r\n10");
-        assert_eq!(stripes(&term), before);
     }
 
     #[test]
